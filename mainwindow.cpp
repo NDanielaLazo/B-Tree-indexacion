@@ -1,0 +1,193 @@
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
+{
+    ui->setupUi(this);
+
+    mainWidget = new QWidget;
+    mainLayout = new QVBoxLayout;
+    userfunctionLayout = new QHBoxLayout;
+
+    treeLayout = new QVBoxLayout;
+
+    insertButton = new QPushButton("Insertar");
+    searchButton = new QPushButton("Buscar");
+    deleteButton = new QPushButton("Eliminar");
+    readButton = new QPushButton("Cargar");
+    writeButton = new QPushButton("Guardar");
+    checkbox=new QCheckBox("Graficar");
+
+    insertKeyText = new QLineEdit;
+    insertDataText = new QLineEdit;
+    searchText = new QLineEdit;
+    deleteText = new QLineEdit;
+
+    insertKeyText->setFixedWidth(50);
+    insertDataText->setFixedWidth(200);
+    searchText->setFixedWidth(50);
+    deleteText->setFixedWidth(50);
+
+    //userfunctionLayout->
+    userfunctionLayout->addWidget(insertKeyText);
+    userfunctionLayout->addWidget(insertDataText);
+    userfunctionLayout->addWidget(insertButton);
+    userfunctionLayout->addWidget(searchText);
+    userfunctionLayout->addWidget(searchButton);
+    userfunctionLayout->addWidget(deleteText);
+    userfunctionLayout->addWidget(deleteButton);
+    userfunctionLayout->addWidget(readButton);
+    userfunctionLayout->addWidget(writeButton);
+
+    userfunctionLayout->addWidget(checkbox);
+
+    connect(insertButton, SIGNAL(clicked()), this, SLOT(insertSlot()));
+    connect(insertKeyText, SIGNAL(returnPressed()), this, SLOT(insertSlot()));
+    connect(insertDataText, SIGNAL(returnPressed()), this, SLOT(insertSlot()));
+
+    connect(readButton, SIGNAL(clicked()), this, SLOT(readSlot()));
+    connect(writeButton, SIGNAL(clicked()), this, SLOT(writeSlot()));
+
+    connect(searchButton, SIGNAL(clicked()), this, SLOT(searchSlot()));
+    connect(searchText, SIGNAL(returnPressed()), this, SLOT(searchSlot()));
+
+    connect(deleteButton, SIGNAL(clicked()),this,SLOT(deleteSlot()));
+    connect(deleteText, SIGNAL(returnPressed()), this, SLOT(deleteSlot()));
+
+    mainLayout->addLayout(userfunctionLayout);
+    mainLayout->addLayout(treeLayout);
+
+    mainWidget->setLayout(mainLayout);
+
+    setCentralWidget(mainWidget);
+    setWindowTitle("BTree");
+
+    beetree = new btree<std::string>(6); // tamaño de nuestro árbol
+}
+
+void MainWindow::plantTree() //grafica nuestro árbol
+{
+    if (beetree->getNumLevels()==0) return;
+
+    static std::vector<QLineEdit*> addedNodeBoxes;
+    static std::vector<QWidget*> addedWidgets;
+
+    for (int i=0; i < addedNodeBoxes.size(); i++)
+        delete addedNodeBoxes[i];
+    for (int i=0; i < addedWidgets.size(); i++)
+        delete addedWidgets[i];
+
+    addedWidgets.clear();
+    addedNodeBoxes.clear();
+
+    for (int k=0; k<beetree->getNumLevels(); k++) {
+        levelVector = beetree->getArraysAtLevel(k); //vector of vectors for that level
+        QHBoxLayout* tempLayout = new QHBoxLayout;
+        for (int i=0; i<levelVector.size(); i++) { //
+            QString qs=" ";
+            for (int j=0; j<levelVector[i].size(); j++) { //inner loop for each level
+                if (qs.length()>1) {
+                    qs.append("| ");
+                }
+                qs.append(QString::number(levelVector[i][j]));
+                qs.append(" ");
+            }
+            QLineEdit* nodeBox = new QLineEdit;
+            nodeBox->setText(qs); //rootBox->setText(qs);
+
+            addedNodeBoxes.push_back(nodeBox);
+            tempLayout->addWidget(nodeBox);
+
+            QFontMetrics fm(nodeBox->fontMetrics());
+            int w = fm.width(nodeBox->text());
+            nodeBox->setReadOnly(true);
+            nodeBox->setAlignment(Qt::AlignCenter);
+            nodeBox->setFixedWidth(w*1.10);
+            nodeBox->setFixedHeight(30);
+        }
+        levelVector.clear();
+
+        QWidget* tempWidget = new QWidget;
+        addedWidgets.push_back(tempWidget);
+        tempWidget->setLayout(tempLayout);
+        treeLayout->addWidget(tempWidget);
+
+    }
+}
+
+void MainWindow::deleteSlot(){
+    unsigned int toDelete = deleteText->text().toUInt();
+    beetree->deleteKey(toDelete);
+    if(checkbox->isChecked())
+        plantTree();
+    deleteText->clear();
+}
+
+void MainWindow::searchSlot() {
+    unsigned int query = searchText->text().toUInt();
+    std::pair<bool, std::string> retVal = beetree->search(query);
+    searchText->clear();
+    QMessageBox* box = new QMessageBox;
+    if (retVal.first)
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(retVal.second)));
+        //QDesktopServices::openUrl(QUrl(retVal.second));
+        //box->setText(QString::fromStdString(retVal.second));
+    else
+        box->setText("Valor no encontrado!");
+    box->exec();
+}
+
+void MainWindow::insertSlot()
+{
+    if (insertKeyText->text().trimmed().length()==0) return;
+    unsigned int key = insertKeyText->text().toUInt();
+    std::string data = insertDataText->text().toStdString();
+    std::pair<unsigned int, std::string> pear;
+    pear.first = key;
+    pear.second = data;
+    beetree->insert(pear);
+    insertKeyText->clear();
+    insertDataText->clear();
+    if(checkbox->isChecked())
+        plantTree();
+}
+
+void MainWindow::readSlot()
+{
+    if (beetree->getNumLevels()==0) return;
+    delete beetree;
+    beetree = new btree<std::string>(3);
+    beetree->readIn("./in.txt");
+    if(checkbox->isChecked())
+        plantTree();
+}
+
+void MainWindow::writeSlot()
+{
+    if (beetree->getNumLevels()==0) return;
+    beetree->writeFile("./out.txt");
+    QGraphicsScene *scn = new QGraphicsScene();
+    vw = new QGraphicsView(scn);
+    QGraphicsPixmapItem *itm = new QGraphicsPixmapItem(*(new QPixmap(":img/images/trex_write.jpg")));
+    vw->setFixedSize(604,280);
+    scn->addItem(itm);
+
+    QPushButton *openButton = new QPushButton(vw);
+    openButton->setText("Open");
+    openButton->setGeometry(400,180,130,30);
+    this->connect(openButton, SIGNAL(clicked()), this, SLOT(openfileSlot()));
+    vw->show();
+}
+
+void MainWindow::openfileSlot()
+{
+    vw->close();
+    QDesktopServices::openUrl(QUrl("./out.txt"));
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
